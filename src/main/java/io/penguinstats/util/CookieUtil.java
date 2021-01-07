@@ -1,26 +1,22 @@
 package io.penguinstats.util;
 
+import io.penguinstats.model.User;
+import io.penguinstats.service.UserService;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-
 import javax.annotation.PostConstruct;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import io.penguinstats.model.User;
-import io.penguinstats.service.UserService;
-
+@Log4j2
 @Component("cookieUtil")
 public class CookieUtil {
 
-	private static Logger logger = LogManager.getLogger(CookieUtil.class);
 	private static CookieUtil cookieUtil;
 
 	@Autowired
@@ -51,32 +47,32 @@ public class CookieUtil {
 		String userID = null;
 		if (cookies != null) {
 			for (Cookie cookie : cookies) {
-				if (cookie.getName().equals("userID")) {
+				if ("userID".equals(cookie.getName())) {
 					userID = cookie.getValue();
 					if (userID != null) {
 						try {
 							userID = URLDecoder.decode(userID, "UTF-8");
 						} catch (UnsupportedEncodingException e) {
-							logger.error("Error in getUserIDFromCookies: ", e);
+							log.error("Error in getUserIDFromCookies: ", e);
 							userID = null;
 						}
 					}
 					if (userID != null) {
 						User user = userService.getUserByUserID(userID);
 						if (user == null) {
-							logger.warn("userID " + userID + " is not existed.");
+							log.warn("userID " + userID + " is not existed.");
 							userID = null;
 						} else {
 							// old user
 							String ip = IpUtil.getIpAddr(request);
 							if (ip != null && !user.containsIp(ip)) {
-								logger.info("Add ip " + ip + " to user " + userID);
+								log.info("Add ip " + ip + " to user " + userID);
 								userService.addIP(userID, ip);
 							}
 						}
 					} else {
 						// userID == null
-						logger.warn("userID's value in the cookie map is null.");
+						log.warn("userID's value in the cookie map is null.");
 					}
 					break;
 				}
@@ -85,4 +81,33 @@ public class CookieUtil {
 		return userID;
 	}
 
+	public static void setOauth2State(HttpServletResponse response, String userID)
+			throws UnsupportedEncodingException {
+		Cookie cookie = new Cookie("oauth2State", URLEncoder.encode(userID, "UTF-8"));
+		cookie.setPath("/");
+		cookie.setMaxAge(60 * 3); // 3 minutes expiration
+		response.addCookie(cookie);
+	}
+
+	public String readOauth2StateFromCookie(HttpServletRequest request) {
+		Cookie[] cookies = request.getCookies();
+		String state = null;
+		if (cookies != null) {
+			for (Cookie cookie : cookies) {
+				if ("oauth2State".equals(cookie.getName())) {
+					state = cookie.getValue();
+					if (state != null) {
+						try {
+							state = URLDecoder.decode(state, "UTF-8");
+						} catch (UnsupportedEncodingException e) {
+							log.error("Error in getOauth2StateFromCookies: ", e);
+							state = null;
+						}
+					}
+					break;
+				}
+			}
+		}
+		return state;
+	}
 }
